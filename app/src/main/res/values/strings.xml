@@ -127,12 +127,12 @@
 
     <string name="dialog_whats_an_instance">The address or domain of any instance can be entered
         here, such as mastodon.social, icosahedron.website, social.tchncs.de, and
-        <a href="https://github.com/tootsuite/mastodon/blob/master/docs/Using-Mastodon/List-of-Mastodon-instances.md">more!</a>
+        <a href="https://instances.social">more!</a>
         \n\nIf you don\'t yet have an account, you can enter the name of the instance you\'d like to
         join and create an account there.\n\nAn instance is a single place where your account is
         hosted, but you can easily communicate with and follow folks on other instances as though
         you were on the same site.
-        \n\nMore info can be found at <a href="https://mastodon.social/about">mastodon.social</a>.
+        \n\nMore info can be found at <a href="https://joinmastodon.org">joinmastodon.org</a>.
     </string>
     <string name="dialog_title_finishing_media_upload">Finishing Media Upload</string>
     <string name="dialog_message_uploading_media">Uploading…</string>
@@ -197,6 +197,18 @@
 
     <string name="combine_s1_s2">%1$s %2$s</string>
     <string name="no_content">no content</string>
-    <string name="action_save_one_toot">Toot saved !</string>
+    <string name="action_save_one_toot">Toot saved!</string>
+
+    <!--These are for timestamps on statuses. For example: "16s" or "2d"-->
+    <string name="abbreviated_in_years">in %dy</string>
+    <string name="abbreviated_in_days">in %dd</string>
+    <string name="abbreviated_in_hours">in %dh</string>
+    <string name="abbreviated_in_minutes">in %dm</string>
+    <string name="abbreviated_in_seconds">in %ds</string>
+    <string name="abbreviated_years_ago">%dy</string>
+    <string name="abbreviated_days_ago">%dd</string>
+    <string name="abbreviated_hours_ago">%dh</string>
+    <string name="abbreviated_minutes_ago">%dm</string>
+    <string name="abbreviated_seconds_ago">%ds</string>
 
 </resources>

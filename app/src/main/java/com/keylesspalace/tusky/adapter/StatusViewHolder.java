@@ -17,6 +17,7 @@ package com.keylesspalace.tusky.adapter;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.preference.PreferenceManager;
 import android.support.annotation.DrawableRes;
 import android.support.annotation.NonNull;
@@ -32,16 +33,17 @@ import android.widget.TextView;
 import android.widget.ToggleButton;
 
 import com.keylesspalace.tusky.R;
-import com.keylesspalace.tusky.view.RoundedTransformation;
-import com.keylesspalace.tusky.interfaces.StatusActionListener;
 import com.keylesspalace.tusky.entity.Status;
+import com.keylesspalace.tusky.interfaces.StatusActionListener;
 import com.keylesspalace.tusky.util.DateUtils;
 import com.keylesspalace.tusky.util.LinkHelper;
 import com.keylesspalace.tusky.util.ThemeUtils;
+import com.keylesspalace.tusky.view.RoundedTransformation;
 import com.keylesspalace.tusky.viewdata.StatusViewData;
 import com.squareup.picasso.Picasso;
 import com.varunest.sparkbutton.SparkButton;
 import com.varunest.sparkbutton.SparkEventListener;
+import com.varunest.sparkbutton.helpers.Utils;
 
 import java.util.Date;
 
@@ -52,6 +54,7 @@ public class StatusViewHolder extends RecyclerView.ViewHolder {
     private TextView sinceCreated;
     private TextView content;
     private ImageView avatar;
+    private ImageView avatarReblog;
     private View rebloggedBar;
     private TextView rebloggedByDisplayName;
     private ImageButton replyButton;
@@ -79,6 +82,7 @@ public class StatusViewHolder extends RecyclerView.ViewHolder {
         sinceCreated = (TextView) itemView.findViewById(R.id.status_since_created);
         content = (TextView) itemView.findViewById(R.id.status_content);
         avatar = (ImageView) itemView.findViewById(R.id.status_avatar);
+        avatarReblog = (ImageView) itemView.findViewById(R.id.status_avatar_reblog);
         rebloggedBar = itemView.findViewById(R.id.status_reblogged_bar);
         rebloggedByDisplayName = (TextView) itemView.findViewById(R.id.status_reblogged);
         replyButton = (ImageButton) itemView.findViewById(R.id.status_reply);
@@ -122,17 +126,37 @@ public class StatusViewHolder extends RecyclerView.ViewHolder {
         LinkHelper.setClickableText(this.content, content, mentions, useCustomTabs, listener);
     }
 
-    private void setAvatar(String url) {
-        if (url.isEmpty()) {
-            return;
-        }
+    private void setAvatar(String url, @Nullable String rebloggedUrl) {
         Context context = avatar.getContext();
-        Picasso.with(context)
-                .load(url)
-                .placeholder(R.drawable.avatar_default)
-                .error(R.drawable.avatar_error)
-                .transform(new RoundedTransformation(7, 0))
-                .into(avatar);
+        boolean hasReblog = rebloggedUrl != null && !rebloggedUrl.isEmpty();
+        int padding = hasReblog ? Utils.dpToPx(context, 12) : 0;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            avatar.setPaddingRelative(0, 0, padding, padding);
+        } else {
+            avatar.setPadding(0, 0, padding, padding);
+        }
+
+        if (url.isEmpty()) {
+            avatar.setImageResource(R.drawable.avatar_default);
+        } else {
+            Picasso.with(context)
+                    .load(url)
+                    .placeholder(R.drawable.avatar_default)
+                    .error(R.drawable.avatar_error)
+                    .transform(new RoundedTransformation(7, 0))
+                    .into(avatar);
+        }
+
+        if (hasReblog) {
+            avatarReblog.setVisibility(View.VISIBLE);
+            Picasso.with(context)
+                    .load(rebloggedUrl)
+                    .fit()
+                    .transform(new RoundedTransformation(7, 0))
+                    .into(avatarReblog);
+        } else {
+            avatarReblog.setVisibility(View.GONE);
+        }
     }
 
     private void setCreatedAt(@Nullable Date createdAt) {
@@ -144,7 +168,7 @@ public class StatusViewHolder extends RecyclerView.ViewHolder {
         if (createdAt != null) {
             long then = createdAt.getTime();
             long now = new Date().getTime();
-            readout = DateUtils.getRelativeTimeSpanString(then, now);
+            readout = DateUtils.getRelativeTimeSpanString(sinceCreated.getContext(), then, now);
             readoutAloud = android.text.format.DateUtils.getRelativeTimeSpanString(then, now,
                     android.text.format.DateUtils.SECOND_IN_MILLIS,
                     android.text.format.DateUtils.FORMAT_ABBREV_RELATIVE);
@@ -344,7 +368,8 @@ public class StatusViewHolder extends RecyclerView.ViewHolder {
         sensitiveMediaWarning.setVisibility(View.GONE);
     }
 
-    private void setSpoilerText(String spoilerText, final boolean expanded, final StatusActionListener listener) {
+    private void setSpoilerText(String spoilerText, final boolean expanded,
+                                final StatusActionListener listener) {
         contentWarningDescription.setText(spoilerText);
         contentWarningBar.setVisibility(View.VISIBLE);
         contentWarningButton.setChecked(expanded);
@@ -460,7 +485,7 @@ public class StatusViewHolder extends RecyclerView.ViewHolder {
         setUsername(status.getNickname());
         setCreatedAt(status.getCreatedAt());
         setContent(status.getContent(), status.getMentions(), listener);
-        setAvatar(status.getAvatar());
+        setAvatar(status.getAvatar(), status.getRebloggedAvatar());
         setReblogged(status.isReblogged());
         setFavourited(status.isFavourited());
         String rebloggedByDisplayName = status.getRebloggedByUsername();

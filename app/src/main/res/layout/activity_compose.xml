@@ -16,8 +16,7 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             android:layout_marginBottom="8dp"
-            android:background="@android:color/transparent"
-            android:elevation="4dp" />
+            android:background="@android:color/transparent" />
 
         <LinearLayout
             android:id="@+id/compose_content_warning_bar"
@@ -152,7 +151,6 @@
                 android:id="@+id/characters_left"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="500"
                 android:textColor="?android:textColorPrimary" />
 
             <Button
