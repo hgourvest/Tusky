@@ -159,6 +159,7 @@ public class TimelineFragment extends SFragment implements
         LocalBroadcastManager.getInstance(context.getApplicationContext())
                 .registerReceiver(timelineReceiver, TimelineReceiver.getFilter(kind));
 
+        statuses.clear();
         topLoading = false;
         topFetches = 0;
         bottomLoading = false;
@@ -342,8 +343,9 @@ public class TimelineFragment extends SFragment implements
     }
 
     @Override
-    public void onViewMedia(String[] urls, int urlIndex, Status.MediaAttachment.Type type) {
-        super.viewMedia(urls, urlIndex, type);
+    public void onViewMedia(String[] urls, int urlIndex, Status.MediaAttachment.Type type,
+                            View view) {
+        super.viewMedia(urls, urlIndex, type, view);
     }
 
     @Override

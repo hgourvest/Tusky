@@ -51,6 +51,7 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.content.FileProvider;
 import android.support.v7.app.ActionBar;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.content.res.AppCompatResources;
 import android.support.v7.widget.Toolbar;
 import android.text.Editable;
@@ -123,7 +124,7 @@ import retrofit2.Response;
 public class ComposeActivity extends BaseActivity implements ComposeOptionsFragment.Listener, ParserUtils.ParserListener {
     private static final String TAG = "ComposeActivity"; // logging tag
     private static final int STATUS_CHARACTER_LIMIT = 500;
-    private static final int STATUS_MEDIA_SIZE_LIMIT = 4000000; // 4MB
+    private static final int STATUS_MEDIA_SIZE_LIMIT = 8388608; // 8MiB
     private static final int MEDIA_PICK_RESULT = 1;
     private static final int MEDIA_TAKE_PHOTO_RESULT = 2;
     private static final int PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE = 1;
@@ -137,10 +138,10 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
     private EditText contentWarningEditor;
     private TextView charactersLeft;
     private Button floatingBtn;
-    private ImageButton pickBtn;
-    private ImageButton takeBtn;
-    private ImageButton hideMediaToggle;
+    private ImageButton pickButton;
     private ImageButton visibilityBtn;
+    private ImageButton saveButton;
+    private ImageButton hideMediaToggle;
     private ProgressBar postProgress;
     // this only exists when a status is trying to be sent, but uploads are still occurring
     private ProgressDialog finishingUploadDialog;
@@ -174,10 +175,10 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
         contentWarningEditor = (EditText) findViewById(R.id.field_content_warning);
         charactersLeft = (TextView) findViewById(R.id.characters_left);
         floatingBtn = (Button) findViewById(R.id.floating_btn);
-        pickBtn = (ImageButton) findViewById(R.id.compose_photo_pick);
-        takeBtn = (ImageButton) findViewById(R.id.compose_photo_take);
-        hideMediaToggle = (ImageButton) findViewById(R.id.action_hide_media);
+        pickButton = (ImageButton) findViewById(R.id.compose_photo_pick);
         visibilityBtn = (ImageButton) findViewById(R.id.action_toggle_visibility);
+        saveButton = (ImageButton) findViewById(R.id.compose_save_draft);
+        hideMediaToggle = (ImageButton) findViewById(R.id.action_hide_media);
         postProgress = (ProgressBar) findViewById(R.id.postProgress);
 
         // Setup the toolbar.
@@ -203,46 +204,31 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
         floatingBtn.setOnLongClickListener(new View.OnLongClickListener() {
             @Override
             public boolean onLongClick(View v) {
-                String contentWarning = null;
-                if (statusHideText) {
-                    contentWarning = contentWarningEditor.getText().toString();
-                }
-                /* Discard any upload URLs embedded in the text because they'll be re-uploaded when
-                 * the draft is loaded and replaced with new URLs. */
-                if (mediaQueued != null) {
-                    for (QueuedMedia item : mediaQueued) {
-                        removeUrlFromEditable(textEditor.getEditableText(), item.uploadUrl);
-                    }
-                }
-                boolean b = saveTheToot(textEditor.getText().toString(), contentWarning);
-                if (b) {
-                    Toast.makeText(ComposeActivity.this, R.string.action_save_one_toot, Toast.LENGTH_SHORT).show();
-                }
-                return b;
+                return saveDraft();
             }
         });
-        pickBtn.setOnClickListener(new View.OnClickListener() {
+        pickButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                onMediaPick();
-            }
-        });
-        takeBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                initiateCameraApp();
-            }
-        });
-        hideMediaToggle.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                toggleHideMedia();
+                openPickDialog();
             }
         });
         visibilityBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 showComposeOptions();
+            }
+        });
+        saveButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                saveDraft();
+            }
+        });
+        hideMediaToggle.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toggleHideMedia();
             }
         });
 
@@ -310,9 +296,11 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
                 }
             } else {
                 String contentWarning = intent.getStringExtra("saved_toot_content_warning");
-                startingHideText = !TextUtils.isEmpty(contentWarning);
-                if (startingHideText) {
-                    startingContentWarning = contentWarning;
+                if (contentWarning != null) {
+                    startingHideText = !contentWarning.isEmpty();
+                    if (startingHideText) {
+                        startingContentWarning = contentWarning;
+                    }
                 }
             }
 
@@ -486,7 +474,6 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
         for (QueuedMedia item : mediaQueued) {
             savedMediaQueued.add(new SavedQueuedMedia(item.type, item.uri, item.preview,
                     item.mediaSize));
-            removeUrlFromEditable(textEditor.getEditableText(), item.uploadUrl);
         }
         outState.putParcelableArrayList("savedMediaQueued", savedMediaQueued);
         outState.putBoolean("showMarkSensitive", showMarkSensitive);
@@ -505,7 +492,7 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
     }
 
     private void doErrorDialog(@StringRes int descriptionId, @StringRes int actionId,
-            View.OnClickListener listener) {
+                               View.OnClickListener listener) {
         Snackbar bar = Snackbar.make(findViewById(R.id.activity_compose), getString(descriptionId),
                 Snackbar.LENGTH_SHORT);
         bar.setAction(actionId, listener);
@@ -532,19 +519,39 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
     }
 
     private void disableButtons() {
-        pickBtn.setClickable(false);
-        takeBtn.setClickable(false);
-        hideMediaToggle.setClickable(false);
+        pickButton.setClickable(false);
         visibilityBtn.setClickable(false);
+        saveButton.setClickable(false);
+        hideMediaToggle.setClickable(false);
         floatingBtn.setEnabled(false);
     }
 
     private void enableButtons() {
-        pickBtn.setClickable(true);
-        takeBtn.setClickable(true);
-        hideMediaToggle.setClickable(true);
+        pickButton.setClickable(true);
         visibilityBtn.setClickable(true);
+        saveButton.setClickable(true);
+        hideMediaToggle.setClickable(true);
         floatingBtn.setEnabled(true);
+    }
+
+    private boolean saveDraft() {
+        String contentWarning = null;
+        if (statusHideText) {
+            contentWarning = contentWarningEditor.getText().toString();
+        }
+        /* Discard any upload URLs embedded in the text because they'll be re-uploaded when
+         * the draft is loaded and replaced with new URLs. */
+        if (mediaQueued != null) {
+            for (QueuedMedia item : mediaQueued) {
+                removeUrlFromEditable(textEditor.getEditableText(), item.uploadUrl);
+            }
+        }
+        boolean b = saveTheToot(textEditor.getText().toString(), contentWarning);
+        if (b) {
+            Toast.makeText(ComposeActivity.this, R.string.action_save_one_toot, Toast.LENGTH_SHORT)
+                    .show();
+        }
+        return b;
     }
 
     private static boolean copyToFile(ContentResolver contentResolver, Uri uri, File file) {
@@ -645,6 +652,10 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
         }
     }
 
+    /**
+     * A∖B={x∈A|x∉B}
+     * @return all elements of set A that are not in set B.
+     */
     private static List<String> setDifference(List<String> a, List<String> b) {
         List<String> c = new ArrayList<>();
         for (String s : a) {
@@ -1018,6 +1029,33 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
         setStateToNotReadying();
     }
 
+    private void openPickDialog() {
+        final int CHOICE_TAKE = 0;
+        final int CHOICE_PICK = 1;
+        CharSequence[] choices = new CharSequence[2];
+        choices[CHOICE_TAKE] = getString(R.string.action_photo_take);
+        choices[CHOICE_PICK] = getString(R.string.action_photo_pick);
+        DialogInterface.OnClickListener listener = new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                switch (which) {
+                    case CHOICE_TAKE: {
+                        initiateCameraApp();
+                        break;
+                    }
+                    case CHOICE_PICK: {
+                        onMediaPick();
+                        break;
+                    }
+                }
+            }
+        };
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setItems(choices, listener)
+                .create();
+        dialog.show();
+    }
+
     private void onMediaPick() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN &&
                 ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
@@ -1102,20 +1140,14 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
     }
 
     private void enableMediaButtons() {
-        pickBtn.setEnabled(true);
-        ThemeUtils.setDrawableTint(this, pickBtn.getDrawable(),
-                R.attr.compose_media_button_tint);
-        takeBtn.setEnabled(true);
-        ThemeUtils.setDrawableTint(this, takeBtn.getDrawable(),
+        pickButton.setEnabled(true);
+        ThemeUtils.setDrawableTint(this, pickButton.getDrawable(),
                 R.attr.compose_media_button_tint);
     }
 
     private void disableMediaButtons() {
-        pickBtn.setEnabled(false);
-        ThemeUtils.setDrawableTint(this, pickBtn.getDrawable(),
-                R.attr.compose_media_button_disabled_tint);
-        takeBtn.setEnabled(false);
-        ThemeUtils.setDrawableTint(this, takeBtn.getDrawable(),
+        pickButton.setEnabled(false);
+        ThemeUtils.setDrawableTint(this, pickButton.getDrawable(),
                 R.attr.compose_media_button_disabled_tint);
     }
 
@@ -1132,13 +1164,13 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
         view.setLayoutParams(layoutParams);
         view.setScaleType(ImageView.ScaleType.CENTER_CROP);
         view.setImageBitmap(preview);
-
         view.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 removeMediaFromQueue(item);
             }
         });
+        view.setContentDescription(getString(R.string.action_delete));
         mediaPreviewBar.addView(view);
         mediaQueued.add(item);
         int queuedCount = mediaQueued.size();
@@ -1340,6 +1372,45 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
         }
     }
 
+    @Nullable
+    private static Bitmap getImageThumbnail(ContentResolver contentResolver, Uri uri) {
+        InputStream stream;
+        try {
+            stream = contentResolver.openInputStream(uri);
+        } catch (FileNotFoundException e) {
+            return null;
+        }
+        Bitmap source = BitmapFactory.decodeStream(stream);
+        if (source == null) {
+            IOUtils.closeQuietly(stream);
+            return null;
+        }
+        Bitmap bitmap = ThumbnailUtils.extractThumbnail(source, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+        source.recycle();
+        try {
+            if (stream != null) {
+                stream.close();
+            }
+        } catch (IOException e) {
+            bitmap.recycle();
+            return null;
+        }
+        return bitmap;
+    }
+
+    @Nullable
+    private static Bitmap getVideoThumbnail(Context context, Uri uri) {
+        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+        retriever.setDataSource(context, uri);
+        Bitmap source = retriever.getFrameAtTime();
+        if (source == null) {
+            return null;
+        }
+        Bitmap bitmap = ThumbnailUtils.extractThumbnail(source, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+        source.recycle();
+        return bitmap;
+    }
+
     private void pickMedia(Uri uri, long mediaSize) {
         ContentResolver contentResolver = getContentResolver();
         if (mediaSize == MediaUtils.MEDIA_SIZE_UNKNOWN) {
@@ -1360,36 +1431,21 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
                         displayTransientError(R.string.error_media_upload_image_or_video);
                         return;
                     }
-                    MediaMetadataRetriever retriever = new MediaMetadataRetriever();
-                    retriever.setDataSource(this, uri);
-                    Bitmap source = retriever.getFrameAtTime();
-                    Bitmap bitmap = ThumbnailUtils.extractThumbnail(source, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
-                    source.recycle();
-                    addMediaToQueue(QueuedMedia.Type.VIDEO, bitmap, uri, mediaSize);
+                    Bitmap bitmap = getVideoThumbnail(this, uri);
+                    if (bitmap != null) {
+                        addMediaToQueue(QueuedMedia.Type.VIDEO, bitmap, uri, mediaSize);
+                    } else {
+                        displayTransientError(R.string.error_media_upload_opening);
+                    }
                     break;
                 }
                 case "image": {
-                    InputStream stream;
-                    try {
-                        stream = contentResolver.openInputStream(uri);
-                    } catch (FileNotFoundException e) {
+                    Bitmap bitmap = getImageThumbnail(contentResolver, uri);
+                    if (bitmap != null) {
+                        addMediaToQueue(QueuedMedia.Type.IMAGE, bitmap, uri, mediaSize);
+                    } else {
                         displayTransientError(R.string.error_media_upload_opening);
-                        return;
                     }
-
-                    Bitmap source = BitmapFactory.decodeStream(stream);
-                    Bitmap bitmap = ThumbnailUtils.extractThumbnail(source, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
-                    source.recycle();
-                    try {
-                        if (stream != null) {
-                            stream.close();
-                        }
-                    } catch (IOException e) {
-                        bitmap.recycle();
-                        displayTransientError(R.string.error_media_upload_opening);
-                        return;
-                    }
-                    addMediaToQueue(QueuedMedia.Type.IMAGE, bitmap, uri, mediaSize);
                     break;
                 }
                 default: {
@@ -1442,10 +1498,12 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
     @Override
     public void onReceiveHeaderInfo(ParserUtils.HeaderInfo headerInfo) {
         if (!TextUtils.isEmpty(headerInfo.title)) {
-            cleanBaseUrl(headerInfo);
-            textEditor.append(headerInfo.title);
-            textEditor.append(StringUtils.carriageReturn);
-            textEditor.append(headerInfo.baseUrl);
+            Editable text = textEditor.getText();
+            int index = text.toString().indexOf(headerInfo.baseUrl);
+            if (index < 0) {
+                index = 0;
+            }
+            text.insert(index, headerInfo.title + StringUtils.carriageReturn);
         }
         if (!TextUtils.isEmpty(headerInfo.image)) {
             Picasso.Builder builder = new Picasso.Builder(getApplicationContext());
@@ -1473,16 +1531,6 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
             });
             Picasso.with(this).load(headerInfo.image).into(target);
         }
-    }
-
-    // remove the precedent paste from the edit text
-    private void cleanBaseUrl(ParserUtils.HeaderInfo headerInfo) {
-        int lengthBaseUrl = headerInfo.baseUrl.length();
-        int total = textEditor.getText().length();
-        int indexSubString = total - lengthBaseUrl;
-        String text = textEditor.getText().toString();
-        text = text.substring(0, indexSubString);
-        textEditor.setText(text);
     }
 
     @Override
@@ -1586,13 +1634,13 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
 
     private class MentionAutoCompleteAdapter extends ArrayAdapter<Account> implements Filterable {
         private ArrayList<Account> resultList;
-        private
         @LayoutRes
-        int layoutId;
+        private int layoutId;
 
         MentionAutoCompleteAdapter(Context context, @LayoutRes int resource) {
             super(context, resource);
             layoutId = resource;
+            resultList = new ArrayList<>();
         }
 
         @Override
@@ -1614,20 +1662,25 @@ public class ComposeActivity extends BaseActivity implements ComposeOptionsFragm
                     return ((Account) resultValue).username;
                 }
 
+                // This method is invoked in a worker thread.
                 @Override
                 protected FilterResults performFiltering(CharSequence constraint) {
                     FilterResults filterResults = new FilterResults();
                     if (constraint != null) {
-                        resultList = autocompleteMention(constraint.toString());
-                        filterResults.values = resultList;
-                        filterResults.count = resultList.size();
+                        ArrayList<Account> accounts = autocompleteMention(constraint.toString());
+                        filterResults.values = accounts;
+                        filterResults.count = accounts.size();
                     }
                     return filterResults;
                 }
 
+                @SuppressWarnings("unchecked")
                 @Override
                 protected void publishResults(CharSequence constraint, FilterResults results) {
                     if (results != null && results.count > 0) {
+                        resultList.clear();
+                        ArrayList<Account> newResults = (ArrayList<Account>) results.values;
+                        resultList.addAll(newResults);
                         notifyDataSetChanged();
                     } else {
                         notifyDataSetInvalidated();

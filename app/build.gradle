@@ -7,8 +7,8 @@ android {
         applicationId "com.keylesspalace.tusky"
         minSdkVersion 15
         targetSdkVersion 25
-        versionCode 21
-        versionName "1.1.4-beta.5"
+        versionCode 25
+        versionName "1.1.4"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary true
     }
@@ -57,13 +57,10 @@ dependencies {
     compile('org.eclipse.paho:org.eclipse.paho.android.service:1.1.1') {
         exclude module: 'support-v4'
     }
-    compile 'org.bouncycastle:bcprov-jdk15on:1.57'
     testCompile 'junit:junit:4.12'
-
     //room
-    compile "android.arch.persistence.room:runtime:1.0.0-alpha3"
+    compile 'android.arch.persistence.room:runtime:1.0.0-alpha3'
     annotationProcessor "android.arch.persistence.room:compiler:1.0.0-alpha3"
-
     googleCompile 'com.google.firebase:firebase-crash:10.0.1'
 }
 

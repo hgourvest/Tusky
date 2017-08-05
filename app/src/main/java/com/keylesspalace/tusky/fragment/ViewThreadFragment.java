@@ -106,6 +106,7 @@ public class ViewThreadFragment extends SFragment implements
         adapter.setMediaPreviewEnabled(mediaPreviewEnabled);
         recyclerView.setAdapter(adapter);
 
+        statuses.clear();
         thisThreadsStatusId = null;
 
         timelineReceiver = new TimelineReceiver(this, this);
@@ -199,8 +200,9 @@ public class ViewThreadFragment extends SFragment implements
     }
 
     @Override
-    public void onViewMedia(String[] urls, int urlIndex, Status.MediaAttachment.Type type) {
-        super.viewMedia(urls, urlIndex, type);
+    public void onViewMedia(String[] urls, int urlIndex, Status.MediaAttachment.Type type,
+                            View view) {
+        super.viewMedia(urls, urlIndex, type, view);
     }
 
     @Override
@@ -268,6 +270,7 @@ public class ViewThreadFragment extends SFragment implements
             }
         }
         statusIndex = statuses.indexOf(status);
+        adapter.setDetailedStatusPosition(statusIndex);
         adapter.setStatuses(statuses.getPairedCopy());
     }
 
@@ -342,6 +345,7 @@ public class ViewThreadFragment extends SFragment implements
         }
         int i = statusIndex;
         statuses.add(i, status);
+        adapter.setDetailedStatusPosition(i);
         adapter.addItem(i, statuses.getPairedItem(i));
         return i;
     }
@@ -360,6 +364,7 @@ public class ViewThreadFragment extends SFragment implements
 
         // Insert newly fetched ancestors
         statusIndex = ancestors.size();
+        adapter.setDetailedStatusPosition(statusIndex);
         statuses.addAll(0, ancestors);
         List<StatusViewData> ancestorsViewDatas = statuses.getPairedCopy().subList(0, statusIndex);
         if (BuildConfig.DEBUG && ancestors.size() != ancestorsViewDatas.size()) {
